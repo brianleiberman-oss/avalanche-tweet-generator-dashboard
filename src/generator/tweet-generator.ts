@@ -137,6 +137,7 @@ Refine each tweet based on the panel's critique. The final output should:
 2. Each tweet MUST cover a DIFFERENT topic (no duplicates)
 3. Topics to cover: news, on-chain metrics, community, gaming/builders, RWAs/institutions
 4. NO generic crypto speak - be specific and authentic
+5. CRITICAL: Only use FRESH data. If a news article or tweet looks old, DO NOT use it. Focus on what's happening NOW, this week.
 
 ## Output Format
 Return ONLY a JSON array with the FINAL refined tweets:

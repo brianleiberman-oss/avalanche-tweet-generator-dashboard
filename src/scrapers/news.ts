@@ -11,12 +11,8 @@ import { ErrorCode } from "../types";
 
 const parser = new Parser();
 
-// RSS feeds to monitor
+// RSS feeds to monitor (removed dead Avalanche Medium blog)
 const NEWS_FEEDS = [
-  {
-    url: "https://medium.com/feed/avalancheavax",
-    source: "Avalanche Blog",
-  },
   {
     url: "https://www.coindesk.com/arc/outboundfeeds/rss/",
     source: "CoinDesk",
@@ -29,7 +25,18 @@ const NEWS_FEEDS = [
     url: "https://decrypt.co/feed",
     source: "Decrypt",
   },
+  {
+    url: "https://www.theblock.co/rss.xml",
+    source: "The Block",
+  },
+  {
+    url: "https://blockworks.co/feed",
+    source: "Blockworks",
+  },
 ];
+
+// Maximum age for news articles (7 days in milliseconds)
+const MAX_NEWS_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Keywords to filter for Avalanche-related content
 const AVALANCHE_KEYWORDS = [
@@ -68,21 +75,38 @@ function calculateRelevance(title: string, summary: string): number {
 }
 
 /**
+ * Check if a date is within the freshness window (last 7 days)
+ */
+function isFresh(dateStr: string): boolean {
+  const publishDate = new Date(dateStr);
+  const now = new Date();
+  const age = now.getTime() - publishDate.getTime();
+  return age <= MAX_NEWS_AGE_MS;
+}
+
+/**
  * Fetch news from all RSS feeds
  */
 export async function scrapeNews(): Promise<Result<NewsItem[]>> {
   const allNews: NewsItem[] = [];
+  const now = new Date();
 
   for (const feed of NEWS_FEEDS) {
     try {
       const parsed = await parser.parseURL(feed.url);
 
-      for (const item of parsed.items.slice(0, 20)) { // Check last 20 items
+      for (const item of parsed.items.slice(0, 30)) { // Check last 30 items
         const title = item.title || "";
         const summary = item.contentSnippet || item.content || "";
+        const publishedAt = item.pubDate || new Date().toISOString();
 
-        // Filter for Avalanche-related content (except Avalanche Blog which is all relevant)
-        if (feed.source !== "Avalanche Blog" && !isAvalancheRelated(title + summary)) {
+        // CRITICAL: Skip old news (older than 7 days)
+        if (!isFresh(publishedAt)) {
+          continue;
+        }
+
+        // Filter for Avalanche-related content
+        if (!isAvalancheRelated(title + summary)) {
           continue;
         }
 
@@ -91,8 +115,8 @@ export async function scrapeNews(): Promise<Result<NewsItem[]>> {
           summary: summary.slice(0, 500), // Truncate long summaries
           url: item.link || "",
           source: feed.source,
-          publishedAt: item.pubDate || new Date().toISOString(),
-          relevanceScore: feed.source === "Avalanche Blog" ? 1 : calculateRelevance(title, summary),
+          publishedAt,
+          relevanceScore: calculateRelevance(title, summary),
         });
       }
 
@@ -104,13 +128,17 @@ export async function scrapeNews(): Promise<Result<NewsItem[]>> {
   }
 
   if (allNews.length === 0) {
-    return fail(ErrorCode.NO_DATA_AVAILABLE, "No Avalanche-related news found");
+    // No fresh Avalanche news found - this is OK, not an error
+    console.log("No fresh Avalanche news found in the last 7 days");
+    return success([]);
   }
 
   // Sort by date, most recent first
   allNews.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
 
-  // Return top 10 most relevant
+  console.log(`Found ${allNews.length} fresh Avalanche news articles`);
+
+  // Return top 10 most recent
   return success(allNews.slice(0, 10));
 }
 
