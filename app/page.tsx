@@ -5,7 +5,8 @@ import { Mountain, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DraftCard } from "@/components/draft-card";
 import { GenerateButton } from "@/components/generate-button";
-import { fetchDrafts, DraftsResponse } from "@/lib/api";
+import { fetchDrafts, DraftsResponse, GenerateResponse } from "@/lib/api";
+import type { TweetDraftsOutput } from "@/src/types";
 
 export default function Dashboard() {
   const [data, setData] = useState<DraftsResponse | null>(null);
@@ -23,6 +24,34 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  // Handle newly generated drafts - add them to the UI directly
+  const handleGenerated = useCallback((result: GenerateResponse) => {
+    const today = new Date().toISOString().split("T")[0];
+    const newDraftOutput: TweetDraftsOutput = {
+      date: today,
+      generatedAt: new Date().toISOString(),
+      drafts: result.drafts,
+      input: result.input as TweetDraftsOutput["input"],
+    };
+
+    setData(prev => {
+      if (!prev) {
+        return { drafts: [newDraftOutput], dates: [today] };
+      }
+      // Replace today's drafts or add new
+      const existingIndex = prev.drafts.findIndex(d => d.date === today);
+      if (existingIndex >= 0) {
+        const newDrafts = [...prev.drafts];
+        newDrafts[existingIndex] = newDraftOutput;
+        return { drafts: newDrafts, dates: prev.dates };
+      }
+      return {
+        drafts: [newDraftOutput, ...prev.drafts],
+        dates: [today, ...prev.dates],
+      };
+    });
   }, []);
 
   useEffect(() => {
@@ -49,7 +78,7 @@ export default function Dashboard() {
                 <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                 Refresh
               </Button>
-              <GenerateButton onGenerated={loadDrafts} />
+              <GenerateButton onGenerated={handleGenerated} />
             </div>
           </div>
         </div>
@@ -82,7 +111,7 @@ export default function Dashboard() {
             <p className="text-muted-foreground mb-6">
               Generate your first batch of tweet drafts to get started
             </p>
-            <GenerateButton onGenerated={loadDrafts} />
+            <GenerateButton onGenerated={handleGenerated} />
           </div>
         )}
 

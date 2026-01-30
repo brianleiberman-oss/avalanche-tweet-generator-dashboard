@@ -9,6 +9,11 @@ export interface GenerateResponse {
   drafts: TweetDraft[];
   tokensUsed: number;
   modelUsed: string;
+  input?: {
+    tweets?: unknown[];
+    news?: unknown[];
+    onchainData?: unknown;
+  };
 }
 
 export interface ReviseResponse {
@@ -28,7 +33,7 @@ export async function fetchDrafts(): Promise<DraftsResponse> {
   return response.json();
 }
 
-export async function generateDrafts(input: GenerationInput): Promise<GenerateResponse> {
+export async function generateDrafts(input: GenerationInput & { scrapeFirst?: boolean }): Promise<GenerateResponse> {
   const response = await fetch("/api/drafts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

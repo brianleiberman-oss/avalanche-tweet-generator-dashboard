@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Loader2 } from "lucide-react";
-import { generateDrafts } from "@/lib/api";
+import { generateDrafts, GenerateResponse } from "@/lib/api";
 
 interface GenerateButtonProps {
-  onGenerated: () => void;
+  onGenerated: (data: GenerateResponse) => void;
 }
 
 export function GenerateButton({ onGenerated }: GenerateButtonProps) {
@@ -17,9 +17,9 @@ export function GenerateButton({ onGenerated }: GenerateButtonProps) {
     setLoading(true);
     setError(null);
     try {
-      // Generate with empty input (uses mock data or general knowledge)
-      await generateDrafts({});
-      onGenerated();
+      // Generate with scrapeFirst to get real data
+      const result = await generateDrafts({ scrapeFirst: true });
+      onGenerated(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate");
     } finally {
