@@ -79,15 +79,31 @@ export function SourcePanel({ news, tweets, onchainData }: SourcePanelProps) {
       return <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />;
     }
     if (!verification) {
-      return <AlertTriangle className="h-3 w-3 text-amber-500" title="Not verified" />;
+      return (
+        <span title="Not verified">
+          <AlertTriangle className="h-3 w-3 text-amber-500" />
+        </span>
+      );
     }
     switch (verification.status) {
       case "verified":
-        return <CheckCircle className="h-3 w-3 text-green-500" title="Verified" />;
+        return (
+          <span title="Verified">
+            <CheckCircle className="h-3 w-3 text-green-500" />
+          </span>
+        );
       case "broken":
-        return <XCircle className="h-3 w-3 text-red-500" title={verification.error || "Broken link"} />;
+        return (
+          <span title={verification.error || "Broken link"}>
+            <XCircle className="h-3 w-3 text-red-500" />
+          </span>
+        );
       default:
-        return <AlertTriangle className="h-3 w-3 text-amber-500" title="Unverified" />;
+        return (
+          <span title="Unverified">
+            <AlertTriangle className="h-3 w-3 text-amber-500" />
+          </span>
+        );
     }
   };
 
