@@ -10,11 +10,38 @@ import { ErrorCode } from "../types";
 
 const TWITTER_API_BASE = "https://api.twitter.com/2";
 
-// Accounts to monitor
+// Accounts to monitor - Official + Key Team Members
 const AVALANCHE_ACCOUNTS = [
-  "avax",         // Main Avalanche handle
-  "AvalancheFDN", // Avalanche Foundation
-  "AvaLabs",      // Ava Labs
+  // Official accounts
+  "avax",           // Main Avalanche handle
+  "AvalancheFDN",   // Avalanche Foundation
+  "AvaLabs",        // Ava Labs
+  // Team & Key Contributors
+  "el33th4xor",     // Emin Gün Sirer
+  "John1wu",        // John Wu
+  "JohnNahas84",    // John Nahas
+  "stvngts",        // Steven Gates
+  "MorganKrupetsky",// Morgan Krupetsky
+  "vohvohh",        // Vohvohh
+  "avery_bartlett", // Avery Bartlett
+  "cryptoreine",    // Cryptoreine
+  "kyledineen",     // Kyle Dineen
+  "nobsfud",        // NoBsFud
+  "__arielle__",    // Arielle
+  "dantwany",       // Dan Twany
+  "MattSchmenk",    // Matt Schmenk
+  "luigidemeo",     // Luigi Demeo
+  "Parkk___",       // Parkk
+  "glabuz",         // Glabuz
+  "encycloplydia",  // Encycloplydia
+  "DominicCarb",    // Dominic Carb
+  "jnuno",          // J Nuno
+  "justinkim415",   // Justin Kim
+  "veritaim",       // Veritaim
+  "chrischalfoun",  // Chris Chalfoun
+  "owenwg",         // Owen WG
+  "jackyavalabs",   // Jacky (Ava Labs)
+  "Andyvargtz",     // Andy Vargtz
 ];
 
 interface TwitterUser {
@@ -77,9 +104,9 @@ export async function scrapeTwitter(): Promise<Result<TwitterPost[]>> {
 
       const userId = userData.data.id;
 
-      // Get recent tweets
+      // Get recent tweets (5 per account to stay within rate limits)
       const tweetsResponse = await fetch(
-        `${TWITTER_API_BASE}/users/${userId}/tweets?max_results=10&tweet.fields=created_at,public_metrics&expansions=author_id&user.fields=name,username`,
+        `${TWITTER_API_BASE}/users/${userId}/tweets?max_results=5&tweet.fields=created_at,public_metrics&expansions=author_id&user.fields=name,username`,
         {
           headers: {
             Authorization: `Bearer ${bearerToken}`,
