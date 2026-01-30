@@ -24,13 +24,27 @@ export async function POST(request: Request) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
-      const response = await fetch(url, {
-        method: "HEAD", // Just check if it exists, don't download
+      // Try HEAD first, fall back to GET if blocked
+      let response = await fetch(url, {
+        method: "HEAD",
         signal: controller.signal,
         headers: {
-          "User-Agent": "Mozilla/5.0 (compatible; AvalancheTweetBot/1.0)",
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
       });
+
+      // If HEAD is forbidden, try GET
+      if (response.status === 403 || response.status === 405) {
+        response = await fetch(url, {
+          method: "GET",
+          signal: controller.signal,
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          },
+        });
+      }
 
       clearTimeout(timeoutId);
 
@@ -47,6 +61,14 @@ export async function POST(request: Request) {
           status: "broken",
           httpStatus: response.status,
           error: "Page not found (404)",
+        });
+      } else if (response.status === 403) {
+        // Site blocks automated access - mark as needs manual verification
+        return NextResponse.json({
+          url,
+          status: "unverified",
+          httpStatus: response.status,
+          error: "Site blocks automated checks - verify manually",
         });
       } else {
         return NextResponse.json({
