@@ -1,21 +1,43 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Mountain, RefreshCw } from "lucide-react";
+import { Mountain, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DraftCard } from "@/components/draft-card";
 import { GenerateButton } from "@/components/generate-button";
 import { fetchDrafts, DraftsResponse, GenerateResponse } from "@/lib/api";
 import type { TweetDraftsOutput } from "@/src/types";
 
+const STORAGE_KEY = "avalanche-tweet-drafts";
+
 export default function Dashboard() {
   const [data, setData] = useState<DraftsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Load from localStorage first, then try API
   const loadDrafts = useCallback(async () => {
     setLoading(true);
     setError(null);
+
+    // Try localStorage first (has latest generated data)
+    try {
+      const cached = localStorage.getItem(STORAGE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached) as DraftsResponse;
+        // Check if cache is from today
+        const today = new Date().toISOString().split("T")[0];
+        if (parsed.drafts?.some(d => d.date === today)) {
+          setData(parsed);
+          setLoading(false);
+          return;
+        }
+      }
+    } catch {
+      // localStorage not available or invalid
+    }
+
+    // Fallback to API (bundled files)
     try {
       const result = await fetchDrafts();
       setData(result);
@@ -26,7 +48,26 @@ export default function Dashboard() {
     }
   }, []);
 
-  // Handle newly generated drafts - add them to the UI directly
+  // Save to localStorage whenever data changes
+  const saveToStorage = useCallback((newData: DraftsResponse) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+    } catch {
+      // localStorage not available
+    }
+  }, []);
+
+  // Clear cached data
+  const clearCache = useCallback(() => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      setData({ drafts: [], dates: [] });
+    } catch {
+      // localStorage not available
+    }
+  }, []);
+
+  // Handle newly generated drafts - add them to the UI and save to localStorage
   const handleGenerated = useCallback((result: GenerateResponse) => {
     const today = new Date().toISOString().split("T")[0];
     const newDraftOutput: TweetDraftsOutput = {
@@ -37,22 +78,28 @@ export default function Dashboard() {
     };
 
     setData(prev => {
+      let newData: DraftsResponse;
       if (!prev) {
-        return { drafts: [newDraftOutput], dates: [today] };
+        newData = { drafts: [newDraftOutput], dates: [today] };
+      } else {
+        // Replace today's drafts or add new
+        const existingIndex = prev.drafts.findIndex(d => d.date === today);
+        if (existingIndex >= 0) {
+          const newDrafts = [...prev.drafts];
+          newDrafts[existingIndex] = newDraftOutput;
+          newData = { drafts: newDrafts, dates: prev.dates };
+        } else {
+          newData = {
+            drafts: [newDraftOutput, ...prev.drafts],
+            dates: [today, ...prev.dates],
+          };
+        }
       }
-      // Replace today's drafts or add new
-      const existingIndex = prev.drafts.findIndex(d => d.date === today);
-      if (existingIndex >= 0) {
-        const newDrafts = [...prev.drafts];
-        newDrafts[existingIndex] = newDraftOutput;
-        return { drafts: newDrafts, dates: prev.dates };
-      }
-      return {
-        drafts: [newDraftOutput, ...prev.drafts],
-        dates: [today, ...prev.dates],
-      };
+      // Save to localStorage for persistence
+      saveToStorage(newData);
+      return newData;
     });
-  }, []);
+  }, [saveToStorage]);
 
   useEffect(() => {
     loadDrafts();
@@ -74,6 +121,9 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={clearCache} title="Clear cached drafts">
+                <Trash2 className="h-4 w-4" />
+              </Button>
               <Button variant="outline" size="sm" onClick={loadDrafts} disabled={loading}>
                 <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                 Refresh
