@@ -110,6 +110,15 @@ ${sampleTweets.length > 0 ? `## Example Tweets (for style reference)\n${sampleTw
 3. When sharing data, make it interesting - don't just state facts
 4. Add a human touch - opinions, reactions, questions
 5. Return a JSON array of tweet drafts
+6. CRITICAL: Each tweet MUST be about a DIFFERENT topic. Cover diverse aspects of the ecosystem:
+   - Protocol news & partnerships
+   - On-chain metrics (TVL, volume, fees)
+   - Developer/builder activity
+   - Community milestones (burns, validators, etc.)
+   - Gaming/entertainment
+   - RWAs/tokenization
+   - Stablecoins/DeFi
+7. NO duplicate topics - if one tweet is about TVL, another cannot be about TVL
 
 ## Output Format
 Return ONLY a JSON array with this structure:
@@ -155,7 +164,17 @@ function buildUserPrompt(input: GenerationInput): string {
         const sign = input.onchainData.tvlChange24h >= 0 ? "+" : "";
         prompt += ` (${sign}${input.onchainData.tvlChange24h.toFixed(1)}% 24h)`;
       }
+      if (input.onchainData.tvlChange7d !== undefined) {
+        const sign = input.onchainData.tvlChange7d >= 0 ? "+" : "";
+        prompt += ` (${sign}${input.onchainData.tvlChange7d.toFixed(1)}% 7d)`;
+      }
       prompt += "\n";
+    }
+    if (input.onchainData.volume24h !== undefined) {
+      prompt += `- DEX Volume (24h): $${formatNumber(input.onchainData.volume24h)}\n`;
+    }
+    if (input.onchainData.fees24h !== undefined) {
+      prompt += `- Fees (24h): $${formatNumber(input.onchainData.fees24h)}\n`;
     }
     if (input.onchainData.transactions24h !== undefined) {
       prompt += `- 24h Transactions: ${input.onchainData.transactions24h.toLocaleString()}\n`;
@@ -170,7 +189,15 @@ function buildUserPrompt(input: GenerationInput): string {
     prompt += `No specific data provided. Generate general Avalanche ecosystem tweets based on your knowledge.\n`;
   }
 
-  prompt += `\nReturn ONLY the JSON array, no other text or markdown.`;
+  prompt += `
+IMPORTANT: Generate ${config.rateLimits.tweetsPerDay} tweets about DIFFERENT topics. Each tweet should cover a unique aspect:
+1. One about ecosystem news/partnerships (from the tweets above)
+2. One about on-chain metrics (TVL, volume, or fees)
+3. One about community/tokenomics (burns, validators, staking)
+4. One about gaming/entertainment or builder activity
+5. One about RWAs/tokenization or institutional adoption
+
+Return ONLY the JSON array, no other text or markdown.`;
 
   return prompt;
 }
