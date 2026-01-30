@@ -1,18 +1,28 @@
 /**
  * On-Chain Data Scraper
- * Fetches real blockchain data from DeFiLlama API
+ * Fetches real blockchain data from DeFiLlama Pro API
  */
 
 import { success, fail } from "../lib/errors";
 import type { Result, OnchainData } from "../types";
 import { ErrorCode } from "../types";
 
-const DEFILLAMA_API = "https://api.llama.fi";
+// Use Pro API if key is available, otherwise fall back to free API
+const DEFILLAMA_API = process.env.DEFILLAMA_API_KEY
+  ? "https://pro-api.llama.fi"
+  : "https://api.llama.fi";
 
-interface DefiLlamaProtocol {
-  tvl: number;
-  change_1d: number;
-  change_7d: number;
+const API_KEY = process.env.DEFILLAMA_API_KEY;
+
+// Helper to add auth headers for Pro API
+function getHeaders(): HeadersInit {
+  if (API_KEY) {
+    return {
+      "Authorization": API_KEY,
+      "Content-Type": "application/json",
+    };
+  }
+  return {};
 }
 
 interface DefiLlamaChain {
@@ -24,13 +34,20 @@ interface DefiLlamaChain {
   chainId: number;
 }
 
+interface StablecoinData {
+  totalCirculatingUSD: { peggedUSD: number };
+}
+
 /**
  * Fetch Avalanche TVL and chain data from DeFiLlama
  */
 export async function scrapeOnchainData(): Promise<Result<OnchainData>> {
   try {
+    const headers = getHeaders();
+    console.log(`Using DeFiLlama ${API_KEY ? 'Pro' : 'Free'} API`);
+
     // Fetch TVL data for Avalanche
-    const tvlResponse = await fetch(`${DEFILLAMA_API}/v2/chains`);
+    const tvlResponse = await fetch(`${DEFILLAMA_API}/v2/chains`, { headers });
 
     if (!tvlResponse.ok) {
       return fail(ErrorCode.SCRAPER_FAILED, `DeFiLlama API error: ${tvlResponse.status}`);
@@ -44,7 +61,7 @@ export async function scrapeOnchainData(): Promise<Result<OnchainData>> {
     }
 
     // Fetch historical TVL for change calculation
-    const historyResponse = await fetch(`${DEFILLAMA_API}/v2/historicalChainTvl/Avalanche`);
+    const historyResponse = await fetch(`${DEFILLAMA_API}/v2/historicalChainTvl/Avalanche`, { headers });
     let tvlChange24h = 0;
     let tvlChange7d = 0;
 
@@ -60,22 +77,13 @@ export async function scrapeOnchainData(): Promise<Result<OnchainData>> {
       }
     }
 
-    // Fetch protocol count and volume data
-    const protocolsResponse = await fetch(`${DEFILLAMA_API}/protocols`);
-    let protocolCount = 0;
-    let totalVolume = 0;
-
-    if (protocolsResponse.ok) {
-      const protocols = await protocolsResponse.json() as Array<{ chains: string[]; tvl: number }>;
-      const avalancheProtocols = protocols.filter(p => p.chains?.includes("Avalanche"));
-      protocolCount = avalancheProtocols.length;
-      totalVolume = avalancheProtocols.reduce((sum, p) => sum + (p.tvl || 0), 0);
-    }
-
     // Fetch DEX volume
     let volume24h: number | undefined;
     try {
-      const volumeResponse = await fetch(`${DEFILLAMA_API}/overview/dexs/Avalanche?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true`);
+      const volumeResponse = await fetch(
+        `${DEFILLAMA_API}/overview/dexs/Avalanche?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true`,
+        { headers }
+      );
       if (volumeResponse.ok) {
         const volumeData = await volumeResponse.json() as { total24h?: number };
         volume24h = volumeData.total24h;
@@ -87,13 +95,60 @@ export async function scrapeOnchainData(): Promise<Result<OnchainData>> {
     // Fetch fees data
     let fees24h: number | undefined;
     try {
-      const feesResponse = await fetch(`${DEFILLAMA_API}/overview/fees/Avalanche?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true`);
+      const feesResponse = await fetch(
+        `${DEFILLAMA_API}/overview/fees/Avalanche?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true`,
+        { headers }
+      );
       if (feesResponse.ok) {
         const feesData = await feesResponse.json() as { total24h?: number };
         fees24h = feesData.total24h;
       }
     } catch {
       // Fees data is optional
+    }
+
+    // Fetch stablecoin data for Avalanche (Pro feature)
+    let stablecoinTvl: number | undefined;
+    try {
+      const stableResponse = await fetch(`${DEFILLAMA_API}/v2/stablecoins`, { headers });
+      if (stableResponse.ok) {
+        const stableData = await stableResponse.json() as {
+          peggedAssets: Array<{
+            chainCirculating: Record<string, { current: { peggedUSD: number } }>
+          }>
+        };
+        // Sum all stablecoins on Avalanche
+        stablecoinTvl = stableData.peggedAssets?.reduce((sum, asset) => {
+          const avaxCirculating = asset.chainCirculating?.Avalanche?.current?.peggedUSD || 0;
+          return sum + avaxCirculating;
+        }, 0);
+      }
+    } catch {
+      // Stablecoin data is optional
+    }
+
+    // Fetch yields/APY data (Pro feature)
+    let topYieldProtocol: { name: string; apy: number; tvl: number } | undefined;
+    try {
+      const yieldsResponse = await fetch(`${DEFILLAMA_API}/pools`, { headers });
+      if (yieldsResponse.ok) {
+        const yieldsData = await yieldsResponse.json() as {
+          data: Array<{ chain: string; project: string; apy: number; tvlUsd: number }>
+        };
+        const avaxPools = yieldsData.data
+          ?.filter(p => p.chain === "Avalanche" && p.apy > 0 && p.tvlUsd > 1000000)
+          ?.sort((a, b) => b.apy - a.apy);
+
+        if (avaxPools && avaxPools.length > 0) {
+          topYieldProtocol = {
+            name: avaxPools[0].project,
+            apy: avaxPools[0].apy,
+            tvl: avaxPools[0].tvlUsd,
+          };
+        }
+      }
+    } catch {
+      // Yields data is optional
     }
 
     const onchainData: OnchainData = {
@@ -106,6 +161,14 @@ export async function scrapeOnchainData(): Promise<Result<OnchainData>> {
       fees24h,
     };
 
+    // Log extra Pro data if available
+    if (stablecoinTvl) {
+      console.log(`Stablecoin TVL on Avalanche: $${(stablecoinTvl / 1e6).toFixed(2)}M`);
+    }
+    if (topYieldProtocol) {
+      console.log(`Top yield on Avalanche: ${topYieldProtocol.name} at ${topYieldProtocol.apy.toFixed(2)}% APY`);
+    }
+
     return success(onchainData);
   } catch (error) {
     return fail(ErrorCode.SCRAPER_FAILED, "Failed to fetch on-chain data", error);
@@ -117,7 +180,8 @@ export async function scrapeOnchainData(): Promise<Result<OnchainData>> {
  */
 export async function getProtocolData(protocolSlug: string): Promise<Result<{ name: string; tvl: number; change24h: number }>> {
   try {
-    const response = await fetch(`${DEFILLAMA_API}/protocol/${protocolSlug}`);
+    const headers = getHeaders();
+    const response = await fetch(`${DEFILLAMA_API}/protocol/${protocolSlug}`, { headers });
 
     if (!response.ok) {
       return fail(ErrorCode.SCRAPER_FAILED, `Protocol fetch failed: ${response.status}`);
@@ -139,5 +203,41 @@ export async function getProtocolData(protocolSlug: string): Promise<Result<{ na
     });
   } catch (error) {
     return fail(ErrorCode.SCRAPER_FAILED, "Failed to fetch protocol data", error);
+  }
+}
+
+/**
+ * Get top protocols on Avalanche by TVL
+ */
+export async function getTopProtocols(limit: number = 10): Promise<Result<Array<{ name: string; tvl: number; category: string }>>> {
+  try {
+    const headers = getHeaders();
+    const response = await fetch(`${DEFILLAMA_API}/protocols`, { headers });
+
+    if (!response.ok) {
+      return fail(ErrorCode.SCRAPER_FAILED, `Protocols fetch failed: ${response.status}`);
+    }
+
+    const protocols = await response.json() as Array<{
+      name: string;
+      chains: string[];
+      tvl: number;
+      category: string;
+      chainTvls: Record<string, number>;
+    }>;
+
+    const avalancheProtocols = protocols
+      .filter(p => p.chains?.includes("Avalanche"))
+      .map(p => ({
+        name: p.name,
+        tvl: p.chainTvls?.Avalanche || 0,
+        category: p.category || "Unknown",
+      }))
+      .sort((a, b) => b.tvl - a.tvl)
+      .slice(0, limit);
+
+    return success(avalancheProtocols);
+  } catch (error) {
+    return fail(ErrorCode.SCRAPER_FAILED, "Failed to fetch top protocols", error);
   }
 }
