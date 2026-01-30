@@ -8,7 +8,7 @@ import { SourcePanel } from "@/components/source-panel";
 import { DraftEditor } from "@/components/draft-editor";
 import { ReviseDialog } from "@/components/revise-dialog";
 import { updateDraft } from "@/lib/api";
-import { Pencil, Sparkles, Newspaper, Twitter, BarChart3, Blend } from "lucide-react";
+import { Pencil, Sparkles, Newspaper, Twitter, BarChart3, Blend, AlertTriangle } from "lucide-react";
 import type { TweetDraft, NewsItem, TwitterPost, OnchainData } from "@/src/types";
 
 interface DraftCardProps {
@@ -77,6 +77,14 @@ export function DraftCard({ draft, inputData, onUpdated }: DraftCardProps) {
         </CardHeader>
 
         <CardContent className="space-y-4">
+          {/* Verification Warning */}
+          {inputData && (inputData.news?.length || inputData.tweets?.length) && (
+            <div className="flex items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+              <span>Verify sources before posting. Click &quot;View Sources&quot; to check links.</span>
+            </div>
+          )}
+
           {/* Tweet Content */}
           <div className="p-4 bg-muted/50 rounded-lg">
             <p className="whitespace-pre-wrap text-sm leading-relaxed">{localContent}</p>

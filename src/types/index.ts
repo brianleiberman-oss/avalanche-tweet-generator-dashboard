@@ -89,7 +89,11 @@ export interface NewsItem {
   source: string;
   publishedAt: string;
   relevanceScore?: number;
+  verified?: boolean;
+  verifiedAt?: string;
 }
+
+export type VerificationStatus = "verified" | "unverified" | "broken" | "pending";
 
 export interface TwitterPost {
   id: string;

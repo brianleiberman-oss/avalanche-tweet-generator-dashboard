@@ -1,9 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, ChevronUp, Newspaper, Twitter, BarChart3, ExternalLink } from "lucide-react";
+import { useState, useCallback } from "react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Newspaper,
+  Twitter,
+  BarChart3,
+  ExternalLink,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  Loader2,
+  RefreshCw
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { NewsItem, TwitterPost, OnchainData } from "@/src/types";
+import { Badge } from "@/components/ui/badge";
+import type { NewsItem, TwitterPost, OnchainData, VerificationStatus } from "@/src/types";
 
 interface SourcePanelProps {
   news?: NewsItem[];
@@ -11,16 +24,81 @@ interface SourcePanelProps {
   onchainData?: OnchainData;
 }
 
+interface UrlVerification {
+  url: string;
+  status: VerificationStatus;
+  error?: string;
+  verifiedAt?: string;
+}
+
 export function SourcePanel({ news, tweets, onchainData }: SourcePanelProps) {
   const [expanded, setExpanded] = useState(false);
+  const [verifications, setVerifications] = useState<Record<string, UrlVerification>>({});
+  const [verifying, setVerifying] = useState<string | null>(null);
 
   const hasData = (news && news.length > 0) || (tweets && tweets.length > 0) || onchainData;
+
+  const verifyUrl = useCallback(async (url: string) => {
+    setVerifying(url);
+    try {
+      const response = await fetch("/api/verify-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const result = await response.json();
+      setVerifications(prev => ({
+        ...prev,
+        [url]: {
+          url,
+          status: result.status as VerificationStatus,
+          error: result.error,
+          verifiedAt: result.verifiedAt,
+        },
+      }));
+    } catch {
+      setVerifications(prev => ({
+        ...prev,
+        [url]: { url, status: "broken", error: "Verification failed" },
+      }));
+    } finally {
+      setVerifying(null);
+    }
+  }, []);
+
+  const verifyAllUrls = useCallback(async () => {
+    const urls = news?.map(n => n.url) || [];
+    for (const url of urls) {
+      await verifyUrl(url);
+    }
+  }, [news, verifyUrl]);
+
+  const getStatusIcon = (url: string) => {
+    const verification = verifications[url];
+    if (verifying === url) {
+      return <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />;
+    }
+    if (!verification) {
+      return <AlertTriangle className="h-3 w-3 text-amber-500" title="Not verified" />;
+    }
+    switch (verification.status) {
+      case "verified":
+        return <CheckCircle className="h-3 w-3 text-green-500" title="Verified" />;
+      case "broken":
+        return <XCircle className="h-3 w-3 text-red-500" title={verification.error || "Broken link"} />;
+      default:
+        return <AlertTriangle className="h-3 w-3 text-amber-500" title="Unverified" />;
+    }
+  };
 
   if (!hasData) {
     return (
       <p className="text-sm text-muted-foreground italic">No source data available</p>
     );
   }
+
+  const hasUnverifiedSources = news?.some(n => !verifications[n.url] || verifications[n.url].status !== "verified");
+  const hasBrokenSources = news?.some(n => verifications[n.url]?.status === "broken");
 
   return (
     <div className="space-y-2">
@@ -33,6 +111,16 @@ export function SourcePanel({ news, tweets, onchainData }: SourcePanelProps) {
         <span className="flex items-center gap-2">
           {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           View Sources
+          {hasBrokenSources && (
+            <Badge variant="destructive" className="text-[10px] px-1 py-0">
+              Broken Links
+            </Badge>
+          )}
+          {!hasBrokenSources && hasUnverifiedSources && (
+            <Badge variant="outline" className="text-[10px] px-1 py-0 text-amber-600 border-amber-300">
+              Unverified
+            </Badge>
+          )}
         </span>
         <span className="text-xs text-muted-foreground">
           {[
@@ -47,6 +135,30 @@ export function SourcePanel({ news, tweets, onchainData }: SourcePanelProps) {
 
       {expanded && (
         <div className="border rounded-md p-4 space-y-4 bg-muted/50">
+          {/* Verification Warning */}
+          {hasUnverifiedSources && (
+            <div className="flex items-center justify-between p-2 bg-amber-50 border border-amber-200 rounded text-xs">
+              <span className="flex items-center gap-2 text-amber-800">
+                <AlertTriangle className="h-4 w-4" />
+                Some sources haven&apos;t been verified. Always verify before sharing.
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={verifyAllUrls}
+                disabled={verifying !== null}
+                className="h-6 text-xs"
+              >
+                {verifying ? (
+                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                ) : (
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                )}
+                Verify All
+              </Button>
+            </div>
+          )}
+
           {/* News Sources */}
           {news && news.length > 0 && (
             <div>
@@ -55,24 +167,52 @@ export function SourcePanel({ news, tweets, onchainData }: SourcePanelProps) {
                 News Articles
               </h4>
               <ul className="space-y-2">
-                {news.map((item, i) => (
-                  <li key={i} className="text-sm">
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-start gap-2 hover:text-blue-600"
-                    >
-                      <ExternalLink className="h-3 w-3 mt-1 flex-shrink-0" />
-                      <div>
-                        <p className="font-medium">{item.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {item.source} &middot; {new Date(item.publishedAt).toLocaleDateString()}
-                        </p>
+                {news.map((item, i) => {
+                  const verification = verifications[item.url];
+                  const isBroken = verification?.status === "broken";
+
+                  return (
+                    <li key={i} className={`text-sm ${isBroken ? "opacity-60" : ""}`}>
+                      <div className="flex items-start gap-2">
+                        <button
+                          onClick={() => verifyUrl(item.url)}
+                          className="mt-1 flex-shrink-0 hover:scale-110 transition-transform"
+                          title="Click to verify"
+                        >
+                          {getStatusIcon(item.url)}
+                        </button>
+                        <div className="flex-1">
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`flex items-start gap-2 ${isBroken ? "line-through text-muted-foreground" : "hover:text-blue-600"}`}
+                          >
+                            <ExternalLink className="h-3 w-3 mt-1 flex-shrink-0" />
+                            <div>
+                              <p className="font-medium">{item.title}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {item.source} &middot; {new Date(item.publishedAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </a>
+                          {isBroken && (
+                            <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                              <XCircle className="h-3 w-3" />
+                              {verification.error || "Link is broken"} - Do not use this source
+                            </p>
+                          )}
+                          {verification?.status === "verified" && (
+                            <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                              <CheckCircle className="h-3 w-3" />
+                              Verified {verification.verifiedAt && `at ${new Date(verification.verifiedAt).toLocaleTimeString()}`}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </a>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
@@ -84,6 +224,10 @@ export function SourcePanel({ news, tweets, onchainData }: SourcePanelProps) {
                 <Twitter className="h-4 w-4 text-sky-500" />
                 Referenced Tweets
               </h4>
+              <p className="text-xs text-amber-600 mb-2 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                Tweet data is from scraping - verify on X/Twitter before citing
+              </p>
               <ul className="space-y-2">
                 {tweets.map((tweet, i) => (
                   <li key={i} className="text-sm border-l-2 border-sky-200 pl-3">
@@ -107,6 +251,10 @@ export function SourcePanel({ news, tweets, onchainData }: SourcePanelProps) {
                 <BarChart3 className="h-4 w-4 text-purple-600" />
                 On-Chain Metrics ({onchainData.chain})
               </h4>
+              <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                <CheckCircle className="h-3 w-3 text-green-500" />
+                Data from DeFiLlama API - {new Date(onchainData.timestamp).toLocaleString()}
+              </p>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 {onchainData.tvl !== undefined && (
                   <div className="bg-background rounded p-2">
