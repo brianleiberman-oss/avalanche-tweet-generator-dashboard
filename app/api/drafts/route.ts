@@ -2,52 +2,12 @@ import { NextResponse } from "next/server";
 import * as fs from "fs";
 import * as path from "path";
 import { generateTweets, saveDrafts } from "@/src/generator/tweet-generator";
+import { scrapeTwitter } from "@/src/scrapers/twitter";
+import { scrapeNews } from "@/src/scrapers/news";
+import { scrapeOnchainData } from "@/src/scrapers/onchain";
 import type { TweetDraftsOutput, GenerationInput } from "@/src/types";
 
 const DRAFTS_DIR = path.join(process.cwd(), "src", "data", "drafts");
-
-// Fallback sample data for production/demo
-const SAMPLE_DRAFTS: TweetDraftsOutput = {
-  date: new Date().toISOString().split("T")[0],
-  generatedAt: new Date().toISOString(),
-  input: {
-    news: [
-      {
-        title: "Avalanche Network Overview",
-        summary: "Real-time data about the Avalanche blockchain ecosystem",
-        url: "https://defillama.com/chain/Avalanche",
-        source: "DeFiLlama",
-        publishedAt: new Date().toISOString(),
-      }
-    ],
-    onchainData: {
-      chain: "Avalanche",
-      timestamp: new Date().toISOString(),
-      tvl: 1250000000,
-      tvlChange24h: 2.5,
-      transactions24h: 850000,
-      activeAddresses24h: 125000,
-    }
-  },
-  drafts: [
-    {
-      id: "sample-tvl-001",
-      content: "Avalanche TVL update:\n\n$1.25B locked across the ecosystem\n850K transactions in the last 24h\n\nThe network keeps building 🔺",
-      source: "onchain",
-      context: "On-chain data from DeFiLlama showing current Avalanche metrics",
-      confidence: 0.85,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "sample-ecosystem-002",
-      content: "Quick Avalanche ecosystem check:\n\n- TVL: $1.25B (+2.5% 24h)\n- 125K active addresses\n- 850K daily transactions\n\nNumbers don't lie #AVAX",
-      source: "onchain",
-      context: "Summary of key on-chain metrics",
-      confidence: 0.9,
-      createdAt: new Date().toISOString(),
-    }
-  ]
-};
 
 export async function GET() {
   try {
@@ -75,30 +35,98 @@ export async function GET() {
       }
     }
 
-    // Return sample data if no files exist (e.g., on Vercel)
-    console.log("No draft files found, returning sample data");
+    // No drafts yet - return empty with message to generate
     return NextResponse.json({
-      drafts: [SAMPLE_DRAFTS],
-      dates: [SAMPLE_DRAFTS.date],
-      isDemo: true
+      drafts: [],
+      dates: [],
+      message: "No drafts yet. Click 'Generate New Drafts' to scrape real data and create tweets."
     });
   } catch (error) {
     console.error("Error fetching drafts:", error);
-    // Return sample data on error
     return NextResponse.json({
-      drafts: [SAMPLE_DRAFTS],
-      dates: [SAMPLE_DRAFTS.date],
-      isDemo: true,
-      error: "Using demo data"
+      drafts: [],
+      dates: [],
+      error: "Failed to load drafts"
     });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as GenerationInput;
+    const body = (await request.json()) as GenerationInput & { scrapeFirst?: boolean };
+    let input: GenerationInput = body;
 
-    const result = await generateTweets(body);
+    // Scrape fresh data if requested or no data provided
+    const shouldScrape = body.scrapeFirst !== false && (!body.news?.length && !body.tweets?.length && !body.onchainData);
+
+    if (shouldScrape) {
+      console.log("Scraping fresh data from all sources...");
+
+      const scrapedInput: GenerationInput = {};
+      const scrapeErrors: string[] = [];
+
+      // Scrape Twitter
+      try {
+        const twitterResult = await scrapeTwitter();
+        if (twitterResult.success && twitterResult.data.length > 0) {
+          scrapedInput.tweets = twitterResult.data;
+          console.log(`Scraped ${twitterResult.data.length} tweets`);
+        } else if (!twitterResult.success) {
+          scrapeErrors.push(`Twitter: ${twitterResult.error.message}`);
+        }
+      } catch (e) {
+        scrapeErrors.push(`Twitter: ${e instanceof Error ? e.message : "Unknown error"}`);
+      }
+
+      // Scrape News
+      try {
+        const newsResult = await scrapeNews();
+        if (newsResult.success && newsResult.data.length > 0) {
+          scrapedInput.news = newsResult.data;
+          console.log(`Scraped ${newsResult.data.length} news articles`);
+        } else if (!newsResult.success) {
+          scrapeErrors.push(`News: ${newsResult.error.message}`);
+        }
+      } catch (e) {
+        scrapeErrors.push(`News: ${e instanceof Error ? e.message : "Unknown error"}`);
+      }
+
+      // Scrape On-chain data
+      try {
+        const onchainResult = await scrapeOnchainData();
+        if (onchainResult.success) {
+          scrapedInput.onchainData = onchainResult.data;
+          console.log("Scraped on-chain data:", scrapedInput.onchainData);
+        } else {
+          scrapeErrors.push(`On-chain: ${onchainResult.error.message}`);
+        }
+      } catch (e) {
+        scrapeErrors.push(`On-chain: ${e instanceof Error ? e.message : "Unknown error"}`);
+      }
+
+      // Log any scrape errors but continue
+      if (scrapeErrors.length > 0) {
+        console.warn("Some scrapers failed:", scrapeErrors);
+      }
+
+      // Use scraped data
+      input = scrapedInput;
+    }
+
+    // Check if we have any data to work with
+    const hasData = input.news?.length || input.tweets?.length || input.onchainData;
+    if (!hasData) {
+      return NextResponse.json(
+        {
+          error: "No data available to generate tweets. Make sure Twitter API key is configured and try again.",
+          scrapeErrors: []
+        },
+        { status: 400 }
+      );
+    }
+
+    // Generate tweets
+    const result = await generateTweets(input);
 
     if (!result.success) {
       return NextResponse.json(
@@ -109,7 +137,7 @@ export async function POST(request: Request) {
 
     // Try to save drafts (may fail on read-only filesystems like Vercel)
     try {
-      const saveResult = saveDrafts(result.data.drafts, body);
+      const saveResult = saveDrafts(result.data.drafts, input);
       if (!saveResult.success) {
         console.warn("Could not save drafts to filesystem:", saveResult.error.message);
       }
@@ -121,11 +149,12 @@ export async function POST(request: Request) {
       drafts: result.data.drafts,
       tokensUsed: result.data.tokensUsed,
       modelUsed: result.data.modelUsed,
+      input, // Include the scraped input data for source display
     });
   } catch (error) {
     console.error("Error generating drafts:", error);
     return NextResponse.json(
-      { error: "Failed to generate drafts" },
+      { error: error instanceof Error ? error.message : "Failed to generate drafts" },
       { status: 500 }
     );
   }
