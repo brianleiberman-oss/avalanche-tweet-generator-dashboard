@@ -7,22 +7,24 @@ import { success, fail } from "../lib/errors";
 import type { Result, OnchainData } from "../types";
 import { ErrorCode } from "../types";
 
-// Use Pro API if key is available, otherwise fall back to free API
-const DEFILLAMA_API = process.env.DEFILLAMA_API_KEY
-  ? "https://pro-api.llama.fi"
-  : "https://api.llama.fi";
-
+// DeFiLlama API - use Pro API if key available, otherwise free tier
 const API_KEY = process.env.DEFILLAMA_API_KEY;
+const DEFILLAMA_API = API_KEY ? "https://pro-api.llama.fi" : "https://api.llama.fi";
 
-// Helper to add auth headers for Pro API
-function getHeaders(): HeadersInit {
+// Helper to add API key as query param (DeFiLlama Pro format)
+function addApiKey(url: string): string {
   if (API_KEY) {
-    return {
-      "Authorization": API_KEY,
-      "Content-Type": "application/json",
-    };
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}apiKey=${API_KEY}`;
   }
-  return {};
+  return url;
+}
+
+// Headers for requests
+function getHeaders(): HeadersInit {
+  return {
+    "Accept": "application/json",
+  };
 }
 
 interface DefiLlamaChain {
@@ -44,10 +46,10 @@ interface StablecoinData {
 export async function scrapeOnchainData(): Promise<Result<OnchainData>> {
   try {
     const headers = getHeaders();
-    console.log(`Using DeFiLlama ${API_KEY ? 'Pro' : 'Free'} API`);
+    console.log(`Using DeFiLlama API${API_KEY ? ' (with Pro key)' : ''}`);
 
     // Fetch TVL data for Avalanche
-    const tvlResponse = await fetch(`${DEFILLAMA_API}/v2/chains`, { headers });
+    const tvlResponse = await fetch(addApiKey(`${DEFILLAMA_API}/v2/chains`), { headers });
 
     if (!tvlResponse.ok) {
       return fail(ErrorCode.SCRAPER_FAILED, `DeFiLlama API error: ${tvlResponse.status}`);
@@ -61,7 +63,7 @@ export async function scrapeOnchainData(): Promise<Result<OnchainData>> {
     }
 
     // Fetch historical TVL for change calculation
-    const historyResponse = await fetch(`${DEFILLAMA_API}/v2/historicalChainTvl/Avalanche`, { headers });
+    const historyResponse = await fetch(addApiKey(`${DEFILLAMA_API}/v2/historicalChainTvl/Avalanche`), { headers });
     let tvlChange24h = 0;
     let tvlChange7d = 0;
 
@@ -81,7 +83,7 @@ export async function scrapeOnchainData(): Promise<Result<OnchainData>> {
     let volume24h: number | undefined;
     try {
       const volumeResponse = await fetch(
-        `${DEFILLAMA_API}/overview/dexs/Avalanche?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true`,
+        addApiKey(`${DEFILLAMA_API}/overview/dexs/Avalanche?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true`),
         { headers }
       );
       if (volumeResponse.ok) {
@@ -96,7 +98,7 @@ export async function scrapeOnchainData(): Promise<Result<OnchainData>> {
     let fees24h: number | undefined;
     try {
       const feesResponse = await fetch(
-        `${DEFILLAMA_API}/overview/fees/Avalanche?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true`,
+        addApiKey(`${DEFILLAMA_API}/overview/fees/Avalanche?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true`),
         { headers }
       );
       if (feesResponse.ok) {
@@ -110,7 +112,7 @@ export async function scrapeOnchainData(): Promise<Result<OnchainData>> {
     // Fetch stablecoin data for Avalanche (Pro feature)
     let stablecoinTvl: number | undefined;
     try {
-      const stableResponse = await fetch(`${DEFILLAMA_API}/v2/stablecoins`, { headers });
+      const stableResponse = await fetch(addApiKey(`${DEFILLAMA_API}/v2/stablecoins`), { headers });
       if (stableResponse.ok) {
         const stableData = await stableResponse.json() as {
           peggedAssets: Array<{
@@ -130,7 +132,7 @@ export async function scrapeOnchainData(): Promise<Result<OnchainData>> {
     // Fetch yields/APY data (Pro feature)
     let topYieldProtocol: { name: string; apy: number; tvl: number } | undefined;
     try {
-      const yieldsResponse = await fetch(`${DEFILLAMA_API}/pools`, { headers });
+      const yieldsResponse = await fetch(addApiKey(`${DEFILLAMA_API}/pools`), { headers });
       if (yieldsResponse.ok) {
         const yieldsData = await yieldsResponse.json() as {
           data: Array<{ chain: string; project: string; apy: number; tvlUsd: number }>
@@ -181,7 +183,7 @@ export async function scrapeOnchainData(): Promise<Result<OnchainData>> {
 export async function getProtocolData(protocolSlug: string): Promise<Result<{ name: string; tvl: number; change24h: number }>> {
   try {
     const headers = getHeaders();
-    const response = await fetch(`${DEFILLAMA_API}/protocol/${protocolSlug}`, { headers });
+    const response = await fetch(addApiKey(`${DEFILLAMA_API}/protocol/${protocolSlug}`), { headers });
 
     if (!response.ok) {
       return fail(ErrorCode.SCRAPER_FAILED, `Protocol fetch failed: ${response.status}`);
@@ -212,7 +214,7 @@ export async function getProtocolData(protocolSlug: string): Promise<Result<{ na
 export async function getTopProtocols(limit: number = 10): Promise<Result<Array<{ name: string; tvl: number; category: string }>>> {
   try {
     const headers = getHeaders();
-    const response = await fetch(`${DEFILLAMA_API}/protocols`, { headers });
+    const response = await fetch(addApiKey(`${DEFILLAMA_API}/protocols`), { headers });
 
     if (!response.ok) {
       return fail(ErrorCode.SCRAPER_FAILED, `Protocols fetch failed: ${response.status}`);
