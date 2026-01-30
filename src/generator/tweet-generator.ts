@@ -129,7 +129,12 @@ Return ONLY a JSON array with this structure:
     "source": "news|twitter|onchain|mixed",
     "context": "Brief explanation of what inspired this tweet",
     "confidence": 0.0-1.0,
-    "createdAt": "ISO timestamp"
+    "createdAt": "ISO timestamp",
+    "metadata": {
+      "newsTitle": "Title of specific news article used (if source=news)",
+      "twitterAuthor": "@handle of specific tweet referenced (if source=twitter)",
+      "onchainMetric": "Specific metric used like 'TVL' or 'volume' (if source=onchain)"
+    }
   }
 ]`;
 }
@@ -243,6 +248,7 @@ function parseResponse(text: string): TweetDraft[] | null {
       context: draft.context || "",
       confidence: draft.confidence || 0.5,
       createdAt: draft.createdAt || new Date().toISOString(),
+      metadata: draft.metadata || undefined,
     }));
   } catch {
     return null;

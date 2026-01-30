@@ -116,11 +116,12 @@ export function DraftCard({ draft, inputData, onUpdated }: DraftCardProps) {
             </div>
           </div>
 
-          {/* Source Data Panel */}
+          {/* Source Data Panel - only show relevant sources for this draft's type */}
           <SourcePanel
-            news={inputData?.news}
-            tweets={inputData?.tweets}
-            onchainData={inputData?.onchainData}
+            news={draft.source === "news" || draft.source === "mixed" ? inputData?.news : undefined}
+            tweets={draft.source === "twitter" || draft.source === "mixed" ? inputData?.tweets : undefined}
+            onchainData={draft.source === "onchain" || draft.source === "mixed" ? inputData?.onchainData : undefined}
+            metadata={draft.metadata}
           />
         </CardContent>
 

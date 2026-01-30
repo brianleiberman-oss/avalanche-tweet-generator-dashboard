@@ -22,6 +22,12 @@ interface SourcePanelProps {
   news?: NewsItem[];
   tweets?: TwitterPost[];
   onchainData?: OnchainData;
+  metadata?: {
+    newsTitle?: string;
+    newsUrl?: string;
+    twitterAuthor?: string;
+    onchainMetric?: string;
+  };
 }
 
 interface UrlVerification {
@@ -31,12 +37,21 @@ interface UrlVerification {
   verifiedAt?: string;
 }
 
-export function SourcePanel({ news, tweets, onchainData }: SourcePanelProps) {
+export function SourcePanel({ news, tweets, onchainData, metadata }: SourcePanelProps) {
   const [expanded, setExpanded] = useState(false);
   const [verifications, setVerifications] = useState<Record<string, UrlVerification>>({});
   const [verifying, setVerifying] = useState<string | null>(null);
 
-  const hasData = (news && news.length > 0) || (tweets && tweets.length > 0) || onchainData;
+  // Filter to specific sources if metadata is provided
+  const filteredNews = metadata?.newsTitle
+    ? news?.filter(n => n.title.toLowerCase().includes(metadata.newsTitle!.toLowerCase().slice(0, 30)))
+    : news;
+
+  const filteredTweets = metadata?.twitterAuthor
+    ? tweets?.filter(t => t.authorHandle.toLowerCase() === metadata.twitterAuthor!.replace('@', '').toLowerCase())
+    : tweets;
+
+  const hasData = (filteredNews && filteredNews.length > 0) || (filteredTweets && filteredTweets.length > 0) || onchainData;
 
   const verifyUrl = useCallback(async (url: string) => {
     setVerifying(url);
@@ -67,11 +82,11 @@ export function SourcePanel({ news, tweets, onchainData }: SourcePanelProps) {
   }, []);
 
   const verifyAllUrls = useCallback(async () => {
-    const urls = news?.map(n => n.url) || [];
+    const urls = filteredNews?.map(n => n.url) || [];
     for (const url of urls) {
       await verifyUrl(url);
     }
-  }, [news, verifyUrl]);
+  }, [filteredNews, verifyUrl]);
 
   const getStatusIcon = (url: string) => {
     const verification = verifications[url];
@@ -113,8 +128,8 @@ export function SourcePanel({ news, tweets, onchainData }: SourcePanelProps) {
     );
   }
 
-  const hasUnverifiedSources = news?.some(n => !verifications[n.url] || verifications[n.url].status !== "verified");
-  const hasBrokenSources = news?.some(n => verifications[n.url]?.status === "broken");
+  const hasUnverifiedSources = filteredNews?.some(n => !verifications[n.url] || verifications[n.url].status !== "verified");
+  const hasBrokenSources = filteredNews?.some(n => verifications[n.url]?.status === "broken");
 
   return (
     <div className="space-y-2">
@@ -140,8 +155,8 @@ export function SourcePanel({ news, tweets, onchainData }: SourcePanelProps) {
         </span>
         <span className="text-xs text-muted-foreground">
           {[
-            news && news.length > 0 ? `${news.length} news` : null,
-            tweets && tweets.length > 0 ? `${tweets.length} tweets` : null,
+            filteredNews && filteredNews.length > 0 ? `${filteredNews.length} news` : null,
+            filteredTweets && filteredTweets.length > 0 ? `${filteredTweets.length} tweets` : null,
             onchainData ? "on-chain" : null,
           ]
             .filter(Boolean)
@@ -176,14 +191,14 @@ export function SourcePanel({ news, tweets, onchainData }: SourcePanelProps) {
           )}
 
           {/* News Sources */}
-          {news && news.length > 0 && (
+          {filteredNews && filteredNews.length > 0 && (
             <div>
               <h4 className="flex items-center gap-2 font-medium text-sm mb-2">
                 <Newspaper className="h-4 w-4 text-blue-600" />
-                News Articles
+                News Article{filteredNews.length > 1 ? 's' : ''} Used
               </h4>
               <ul className="space-y-2">
-                {news.map((item, i) => {
+                {filteredNews.map((item, i) => {
                   const verification = verifications[item.url];
                   const isBroken = verification?.status === "broken";
 
@@ -234,18 +249,18 @@ export function SourcePanel({ news, tweets, onchainData }: SourcePanelProps) {
           )}
 
           {/* Twitter Sources */}
-          {tweets && tweets.length > 0 && (
+          {filteredTweets && filteredTweets.length > 0 && (
             <div>
               <h4 className="flex items-center gap-2 font-medium text-sm mb-2">
                 <Twitter className="h-4 w-4 text-sky-500" />
-                Referenced Tweets
+                Tweet{filteredTweets.length > 1 ? 's' : ''} Referenced
               </h4>
               <p className="text-xs text-amber-600 mb-2 flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3" />
                 Tweet data is from scraping - verify on X/Twitter before citing
               </p>
               <ul className="space-y-2">
-                {tweets.map((tweet, i) => (
+                {filteredTweets.map((tweet, i) => (
                   <li key={i} className="text-sm border-l-2 border-sky-200 pl-3">
                     <p className="font-medium">@{tweet.authorHandle}</p>
                     <p className="text-muted-foreground">{tweet.content}</p>
