@@ -12,7 +12,8 @@
     "scrape:news": "ts-node src/scrapers/news.ts",
     "scrape:twitter": "ts-node src/scrapers/twitter.ts",
     "scrape:onchain": "ts-node src/scrapers/onchain.ts",
-    "scrape:all": "npm run scrape:news && npm run scrape:twitter && npm run scrape:onchain"
+    "scrape:all": "npm run scrape:news && npm run scrape:twitter && npm run scrape:onchain",
+    "build:voice": "npx tsx src/scripts/build-voice-profile.ts"
   },
   "keywords": ["avalanche", "twitter", "ai", "crypto"],
   "author": "Brian Leiberman",
