@@ -110,7 +110,7 @@ export const voiceSamples: VoiceSample[] = [
     }
   },
   {
-    "text": "The pleasure is mine, DeFi Team\n\n🔺 @turtledotxyz  is live on @avax , distributing 25,000 AVAX in liquid rewards across three curated vaults for Stables, BTC, and AVAX\n\n🔺 @KelpDAO  "s  rsETH is now live with boosted rates on @BlackholeDex (2× Kernel Points, AVAX rewards, Black",
+    "text": "The pleasure is mine, DeFi Team\n\n🔺 @turtledotxyz  is live on @avax , distributing 25,000 AVAX in liquid rewards across three curated vaults for Stables, BTC, and AVAX\n\n🔺 @KelpDAO's rsETH is now live with boosted rates on @BlackholeDex (2× Kernel Points, AVAX rewards, Black",
     "topics": [
       "@avax",
       "team",
