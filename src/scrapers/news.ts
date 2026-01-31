@@ -13,6 +13,17 @@ const parser = new Parser();
 
 // RSS feeds to monitor - comprehensive crypto and finance sources
 const NEWS_FEEDS = [
+  // PRIORITY: Google News aggregates Avalanche news from all sources
+  {
+    url: "https://news.google.com/rss/search?q=avalanche+avax+blockchain&hl=en-US&gl=US&ceid=US:en",
+    source: "Google News",
+    skipKeywordFilter: true, // Already filtered by search query
+  },
+  {
+    url: "https://news.google.com/rss/search?q=ava+labs+crypto&hl=en-US&gl=US&ceid=US:en",
+    source: "Google News",
+    skipKeywordFilter: true,
+  },
   // Crypto-native
   {
     url: "https://www.coindesk.com/arc/outboundfeeds/rss/",
@@ -33,28 +44,6 @@ const NEWS_FEEDS = [
   {
     url: "https://blockworks.co/feed",
     source: "Blockworks",
-  },
-  // Wire services (often break institutional news)
-  {
-    url: "https://www.prnewswire.com/rss/financial-services-latest-news/financial-services-latest-news-list.rss",
-    source: "PR Newswire",
-  },
-  {
-    url: "https://feed.businesswire.com/rss/home/?rss=G1QFDERJXkJeEFpRWg==",
-    source: "Business Wire",
-  },
-  // Mainstream finance
-  {
-    url: "https://finance.yahoo.com/rss/topstories",
-    source: "Yahoo Finance",
-  },
-  {
-    url: "https://www.cnbc.com/id/100003114/device/rss/rss.html",
-    source: "CNBC",
-  },
-  {
-    url: "https://www.marketwatch.com/rss/topstories",
-    source: "MarketWatch",
   },
   // Reddit (JSON feed)
   {
@@ -168,8 +157,10 @@ export async function scrapeNews(): Promise<Result<NewsItem[]>> {
 
   for (const feed of NEWS_FEEDS) {
     try {
+      const feedConfig = feed as { isReddit?: boolean; skipKeywordFilter?: boolean };
+
       // Handle Reddit separately
-      if ((feed as { isReddit?: boolean }).isReddit) {
+      if (feedConfig.isReddit) {
         const redditItems = await fetchReddit(feed.url);
         allNews.push(...redditItems);
         continue;
@@ -187,8 +178,8 @@ export async function scrapeNews(): Promise<Result<NewsItem[]>> {
           continue;
         }
 
-        // Filter for Avalanche-related content
-        if (!isAvalancheRelated(title + summary)) {
+        // Filter for Avalanche-related content (skip for pre-filtered sources like Google News)
+        if (!feedConfig.skipKeywordFilter && !isAvalancheRelated(title + summary)) {
           continue;
         }
 
@@ -198,7 +189,7 @@ export async function scrapeNews(): Promise<Result<NewsItem[]>> {
           url: item.link || "",
           source: feed.source,
           publishedAt,
-          relevanceScore: calculateRelevance(title, summary),
+          relevanceScore: feedConfig.skipKeywordFilter ? 0.9 : calculateRelevance(title, summary),
         });
       }
 
