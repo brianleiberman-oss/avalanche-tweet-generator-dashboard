@@ -124,13 +124,33 @@ Before outputting, mentally simulate each tweet being reviewed by these 10 exper
 **10. Engagement Optimizer** - Does it invite replies, RTs, or discussion?
 
 ### STEP 4: Apply Expert Feedback
-Refine each tweet based on the panel's critique. The final output should:
-- Hook readers in the first line
-- Sound authentically like @${config.voice.twitterHandle}
-- Make data interesting, not boring
-- Have personality and wit (not try-hard humor)
-- Be shareable by serious crypto people
-- Invite engagement naturally
+Refine each tweet based on the panel's critique.
+
+### STEP 5: FINAL VOICE AUTHENTICITY PASS (CRITICAL)
+After expert review, rewrite EVERY tweet through @${config.voice.twitterHandle}'s authentic voice:
+
+**Voice DNA to inject:**
+- Writes like they're texting a smart friend, not posting for clout
+- Uses "..." for dramatic pauses naturally
+- Drops occasional lowercase for casual feel
+- Has opinions but backs them with data
+- Self-aware humor, never try-hard
+- Would rather understate than hype
+- Uses specific numbers, not vague claims
+- Comfortable being contrarian when right
+- Sounds like a real person at a conference bar, not a brand account
+
+**De-AI checklist (remove these tells):**
+- NO starting with "Just" or "So"
+- NO "Here's why this matters:" - just say it
+- NO "Let's talk about..." - just talk about it
+- NO exclamation marks unless genuinely exciting!!
+- NO "Unpopular opinion:" - just state the opinion
+- NO formulaic structures (hook → context → CTA)
+- NO sounding like a LinkedIn post
+- NO corporate smooth edges - keep some rough authenticity
+
+**Final vibe check:** Would @${config.voice.twitterHandle} actually tweet this while walking to get coffee? If it sounds too polished or "content-y", rough it up.
 
 ### RULES
 1. Max ${config.voice.tweetMaxLength} characters per tweet
@@ -222,15 +242,15 @@ Generate ${config.rateLimits.tweetsPerDay} tweets about DIFFERENT topics:
 4. Gaming/entertainment or builder activity
 5. RWAs/tokenization or institutional adoption
 
-## REMEMBER THE EXPERT PANEL
-Before outputting each tweet, ask yourself:
-- Would a Twitter growth expert say this hooks people?
-- Would a CT veteran say this sounds authentic?
-- Would a copywriter say every word earns its place?
-- Would the Avalanche community actually engage with this?
-- Does this sound like @${config.voice.twitterHandle}'s real voice?
+## REMEMBER THE EXPERT PANEL + VOICE PASS
+Before outputting each tweet:
+1. Run through the 10-expert panel critique
+2. Then apply the FINAL VOICE AUTHENTICITY PASS
+3. Ask: "Would @${config.voice.twitterHandle} actually type this while distracted?"
+4. If it sounds too "written" or "produced" - rough it up
+5. Remove any AI-sounding patterns (no "Just...", "Here's why...", "Let's...")
 
-Only output tweets that pass ALL expert checks.
+The best tweet sounds like a thought someone had and quickly typed out - not content that was carefully crafted.
 
 Return ONLY the JSON array, no other text or markdown.`;
 
